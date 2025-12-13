@@ -1,19 +1,19 @@
+mod encoder;
+mod reader;
 use std::path::PathBuf;
-
-use hound;
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Error, Parser, Subcommand, error::ErrorKind};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about= None)]
 struct Args {
-    /// File path of the WAV file
-    #[arg(short, long, value_name = "FILE")]
+    /// File path of the WAV file. WARNING: Runnning this command as-is will just print out all the normalized samples of your program. Not very useful.
+    #[arg(value_name = "FILE")]
     path: PathBuf,
 }
 
 fn main() {
     let args = Args::parse();
-    let mut reader = hound::WavReader::open(args.path.as_path()).unwrap();
-    let num = reader.samples::<i16>().count(); // I think this is the number of samples but i'm not sure
-    println!("{num}");
+    let samples = reader::read_and_normalize_wav(args.path).unwrap();
+
+    println!("{:#?}", samples.samples)
 }
