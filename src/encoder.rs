@@ -45,7 +45,7 @@ pub fn encode_file(buffer:AudioBuffer, filename:PathBuf) {
     writer.finalize().unwrap();
 
     if count > 0 {
-        println!("Warning, audio may be distorted! Counted {} samples that exceeded the maximum amplitude. Consider decreasing the gain or normalizing the audio", count);
+        println!("Warning, audio will clip! Counted {} samples that exceed 0 dB", count);
     }
 }
 

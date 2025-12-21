@@ -3,6 +3,7 @@ mod decoder;
 mod types;
 mod effect_parser;
 mod dynamics;
+mod delay;
 
 use std::path::PathBuf;
 use clap::{CommandFactory, Parser, error::ErrorKind};
@@ -21,6 +22,10 @@ struct Args {
     /// Whether to edit the original file
     #[arg(long)]
     overwrite: bool,
+
+    /// Set a fixed tail duration in seconds 
+    #[arg(long, short)]
+    tail: Option<f32>,
 
     /// The effects chain
     effects: Vec<String>,
@@ -44,6 +49,7 @@ fn main() {
         match effect.effect_name.as_str() {
             "gain" => dynamics::gain(&mut buffer, &effect.arguments).unwrap(),
             "softclip" => dynamics::distortion(&mut buffer, &effect.arguments).unwrap(),
+            "delay" => delay::delay(&mut buffer, &effect.arguments, args.tail),
             _ => {panic!("Uknown effect")}
         }
     }

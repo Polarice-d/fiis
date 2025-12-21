@@ -10,3 +10,8 @@ pub struct EffectSpec {
     pub effect_name: String,
     pub arguments: HashMap<String, Option<String>>
 }
+
+pub struct EffectArgument {
+    pub name: String,
+    pub value: Option<String>
+}
