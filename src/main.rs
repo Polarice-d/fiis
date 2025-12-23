@@ -2,11 +2,12 @@ mod encoder;
 mod decoder;
 mod types;
 mod effect_parser;
-mod dynamics;
-mod delay;
+mod effect_modules;
 
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
 use clap::{CommandFactory, Parser, error::ErrorKind};
+
+use crate::types::AudioEffect;
 
 #[derive(Parser)]
 #[command(name="fiis", version, about, long_about= None)]
@@ -36,29 +37,74 @@ fn error(message: String, kind: ErrorKind) {
     cmd.error(kind, message).exit();
 }
 
+fn add_effect<T: AudioEffect + 'static>(effect: T, effect_map: &mut HashMap<String, Box<dyn AudioEffect>>) {
+    effect_map.insert(effect.get_name(), Box::new(effect));
+}
+
 fn main() {
+    let mut effect_map: HashMap<String, Box<dyn AudioEffect>> = HashMap::new();
+
+    // HERE IS WHERE YOU ADD EFFECTS --> //
+    add_effect(effect_modules::delay::Delay, &mut effect_map);
+    add_effect(effect_modules::gain::Gain, &mut effect_map);
+    add_effect(effect_modules::softclip::Softclip, &mut effect_map);
+    add_effect(effect_modules::normalize::Normalize, &mut effect_map);
+
+    // <-- HERE IS WHERE YOU ADD EFFECTS//
+
     let args = Args::parse();
+    if args.output.is_some() && args.overwrite {
+        error("Cannot use output (-o) and overwrite (--overwrite) at the same time".to_string(), ErrorKind::ArgumentConflict);
+        return;
+    }
+
+    let effect_chain = match effect_parser::parse_effects(&args.effects) {
+        Ok(v) => v,
+        Err(message) => {
+            error(message, ErrorKind::InvalidValue);
+            return;
+        }
+    };
+
+    for effect_spec in effect_chain.iter() {
+        match effect_map.get(&effect_spec.name) {
+            Some(effect) => {
+                match effect.validate_arguments(&effect_spec.arguments, &args.tail) {
+                    Ok(_) => {},
+                    Err(message) => {
+                        error(message, ErrorKind::InvalidValue);
+                        return;
+                    }
+                }
+            },
+            None => {
+                error(format!("unknown effect '{}'", effect_spec.name), ErrorKind::UnknownArgument);
+                return;
+            }
+        }
+    }
+
     let mut buffer = match decoder::read_and_normalize_wav(&args.file_path) {
         Ok(val) => val,
         Err(e) => {error(e, ErrorKind::Io); return;}
     };
 
-    let effect_chain = effect_parser::parse_effects(&args.effects).unwrap();
-
-    for effect in effect_chain.iter() {
-        match effect.effect_name.as_str() {
-            "gain" => dynamics::gain(&mut buffer, &effect.arguments).unwrap(),
-            "softclip" => dynamics::distortion(&mut buffer, &effect.arguments).unwrap(),
-            "delay" => delay::delay(&mut buffer, &effect.arguments, args.tail),
-            _ => {panic!("Uknown effect")}
+    for effect_spec in effect_chain.iter() {
+        let effect = effect_map.get(&effect_spec.name).unwrap();
+        println!("Applying effect '{}'", effect_spec.name);
+        match effect.apply_effect(&mut buffer, &effect_spec.arguments, &args.tail) {
+            Ok(_) => {},
+            Err(message) => {
+                error(message, ErrorKind::Io);
+            }
         }
     }
 
+    println!("Finished processing, writing to file...\n");
+
     if args.overwrite {
         encoder::encode_file(buffer, args.file_path);
-    } else if args.output.is_some() {
-        encoder::encode_file(buffer, args.output.unwrap());
-    } else {
-        error("no output file specified (use --overwrite to edit the original file)".into(), ErrorKind::MissingRequiredArgument);
+        return;
     }
+    encoder::encode_file(buffer, args.output.unwrap());
 }

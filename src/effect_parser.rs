@@ -1,10 +1,10 @@
-use std::{collections::HashMap};
+use std::{collections::HashMap, num::ParseFloatError};
 
 use crate::types::{EffectSpec};
 
 fn parse_effect_spec(input: &str) -> Result<EffectSpec, String> {
     let buffer: Vec<&str> = input.split(":").collect();
-    let mut arguments: HashMap<String, Option<String>> = HashMap::new();
+    let mut arguments: HashMap<String, f32> = HashMap::new();
 
     let effect_name = buffer[0].trim().to_lowercase();
     if effect_name.is_empty() {
@@ -18,15 +18,16 @@ fn parse_effect_spec(input: &str) -> Result<EffectSpec, String> {
 
         let pair: Vec<&str> = arg.split("=").collect();
         match pair.len() {
-            1 => arguments.insert(pair[0].trim().to_lowercase(), None),
-            2 => arguments.insert(pair[0].trim().to_lowercase(), Some(pair[1].trim().to_lowercase())),
-            _ => return Err(format!("malformed argument '{arg}' for effect '{effect_name}'"))
+            2 => arguments.insert(
+                pair[0].trim().to_lowercase(),
+                pair[1].trim().to_lowercase().parse().map_err(|e: ParseFloatError| e.to_string())?),
+            _ => return Err(format!("Malformed argument '{arg}' for effect '{effect_name}'"))
         };
     }
 
     return Ok(
         EffectSpec {
-            effect_name,
+            name: effect_name,
             arguments: arguments
         }
     );

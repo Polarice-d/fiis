@@ -1,17 +1,18 @@
 use hound::WavSpec;
 use std::collections::HashMap;
 
+pub trait AudioEffect {
+    fn get_name(&self) -> String;
+    fn validate_arguments(&self, arguments: &HashMap<String, f32>, tail_length: &Option<f32>) -> Result<(), String>;
+    fn apply_effect(&self, buffer: &mut AudioBuffer, arguments: &HashMap<String, f32>, tail_length: &Option<f32>) -> Result<(), String>;
+}
+
 pub struct AudioBuffer {
-    pub original_spec: WavSpec,
-    pub normalized_samples: Vec<f32>
+    pub spec: WavSpec,
+    pub samples: Vec<f32>
 }
 
 pub struct EffectSpec {
-    pub effect_name: String,
-    pub arguments: HashMap<String, Option<String>>
-}
-
-pub struct EffectArgument {
     pub name: String,
-    pub value: Option<String>
+    pub arguments: HashMap<String, f32>
 }

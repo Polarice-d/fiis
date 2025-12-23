@@ -1,0 +1,78 @@
+use std::collections::HashMap;
+use ringbuffer::{AllocRingBuffer, RingBuffer};
+use crate::types::{AudioBuffer, AudioEffect};
+
+pub struct Delay;
+
+const COMMAND_NAME: &str = "delay";
+const MIX_NAME: &str = "mix";
+const FEEDBACK_NAME: &str = "feedback";
+const TIME_NAME: &str = "time";
+const MIN_DELAY_ENERGY: f64 = 0.0001; // This number is equivalent to -80 dB in energy
+const SQUARE_MIN_DELAY_ENERGY: f64 = MIN_DELAY_ENERGY * MIN_DELAY_ENERGY;
+
+impl AudioEffect for Delay {
+
+    fn get_name(&self) -> String { COMMAND_NAME.to_string() }
+
+    fn validate_arguments(&self, arguments: &HashMap<String, f32>, tail_length: &Option<f32>) -> Result<(), String> {
+        let _mix = arguments.get(MIX_NAME).ok_or_else(|| format!("Missing delay argument '{MIX_NAME}' (add '{MIX_NAME}=x' to delay:)"))?;
+        let feedback = arguments.get(FEEDBACK_NAME).ok_or_else(|| format!("Missing delay argument '{FEEDBACK_NAME}' (add '{FEEDBACK_NAME}=x' to 'delay:')"))?;
+        let _time = arguments.get(TIME_NAME).ok_or_else(|| format!("Missing delay argument '{TIME_NAME}' (add '{TIME_NAME}=x' to 'delay:')"))?;
+
+        if *feedback >= 1.0 && tail_length.is_none() {
+            return Err("Tail length (--tail, -t) is required for delay feedback >= 1 to avoid infinite feedback cycles".to_string());
+        }
+
+        if *feedback < 1.0 && *feedback > 0.9 && tail_length.is_none() {
+            println!("Warning, delay feedback level ~1 was requested! Processing may take a while and your file may be quite large");
+        }
+
+        Ok(())
+    }
+
+    fn apply_effect(&self, audio_buffer: &mut AudioBuffer, arguments: &HashMap<String,f32>, tail_length: &Option<f32>) -> Result<(), String> {
+        let mix = arguments.get(MIX_NAME).unwrap();
+        let feedback = arguments.get(FEEDBACK_NAME).unwrap();
+        let time = arguments.get(TIME_NAME).unwrap();
+
+        let sample_rate = audio_buffer.spec.sample_rate as i32;
+        let ringbuffer_size = ((time / 1000.0) * sample_rate as f32 * audio_buffer.spec.channels as f32) as usize;
+        let mut buffer: AllocRingBuffer<f32> = AllocRingBuffer::new(ringbuffer_size);
+        
+        buffer.enqueue(0.0);
+        
+        for sample in audio_buffer.samples.iter_mut() {
+            buffer.enqueue((*sample + buffer.front().unwrap()) * feedback);
+            *sample += buffer.front().unwrap() * mix;
+        }
+    
+        let mut square_sum: f64 = buffer.iter().map(|val| val.powf(2.0)).sum::<f32>() as f64;
+        let normalizing_factor: f64 = 1.0/(ringbuffer_size as f64);
+    
+        if tail_length.is_some() {
+            let tail_samples = audio_buffer.spec.channels as i32 * tail_length.unwrap() as i32 * sample_rate;
+            for _ in 0 .. tail_samples {
+                buffer.enqueue(buffer.front().unwrap() * feedback);
+                audio_buffer.samples.push((buffer.front().unwrap() * mix).clamp(-1.0, 1.0));
+            }
+        } else {
+            while normalizing_factor * square_sum > SQUARE_MIN_DELAY_ENERGY { 
+                let front_val = *buffer.front().unwrap();
+                square_sum -= (front_val * front_val) as f64;
+                buffer.enqueue(front_val * feedback);
+
+                let back_val = buffer.back().unwrap();
+                square_sum += (back_val * back_val) as f64;
+
+                audio_buffer.samples.push((buffer.front().unwrap() * mix).clamp(-1.0, 1.0));
+            }
+        }
+    
+        if audio_buffer.samples.len() % 2 != 0 {
+            audio_buffer.samples.push(0.0);
+        }
+
+        Ok(())
+    } 
+}
