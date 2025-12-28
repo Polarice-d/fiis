@@ -9,18 +9,20 @@ const DB_NAME: &str = "db";
 impl AudioEffect for Softclip {
     fn get_name(&self) -> String { COMMAND_NAME.to_string() }
 
-    fn validate_arguments(&self, arguments: &HashMap<String, f32>, _tail_length: &Option<f32>) -> Result<(), String> {
+    fn validate_arguments(&self, arguments: &HashMap<String, f64>, _tail_length: &Option<f64>) -> Result<(), String> {
         let _db = arguments.get(DB_NAME).ok_or_else(|| format!("Missing softclip argument '{DB_NAME}' (add '{DB_NAME}=x' to '{COMMAND_NAME}:')"))?;
         Ok(())
     }
 
-    fn apply_effect(&self, buffer: &mut AudioBuffer, arguments: &HashMap<String, f32>, _tail_length: &Option<f32>) -> Result<(), String> {
+    fn apply_effect(&self, buffer: &mut AudioBuffer, arguments: &HashMap<String, f64>, _tail_length: &Option<f64>) -> Result<(), String> {
         let db = arguments.get(DB_NAME).unwrap();
-        let factor = 10.0_f32.powf(db / 20.0);
+        let factor = 10.0_f64.powf(db / 20.0);
 
-        for buf in buffer.samples.iter_mut() {
-            *buf = (*buf * factor).tanh();
-        };
+        for channel in buffer.channels.iter_mut() {
+            for sample in channel.iter_mut() {
+                *sample = (*sample * factor).tanh();
+            };
+        }
         
         Ok(())
     }

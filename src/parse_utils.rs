@@ -4,7 +4,7 @@ use crate::types::{EffectSpec};
 
 fn parse_effect_spec(input: &str) -> Result<EffectSpec, String> {
     let buffer: Vec<&str> = input.split(":").collect();
-    let mut arguments: HashMap<String, f32> = HashMap::new();
+    let mut arguments: HashMap<String, f64> = HashMap::new();
 
     let effect_name = buffer[0].trim().to_lowercase();
     if effect_name.is_empty() {
@@ -44,3 +44,23 @@ pub fn parse_effects(input: &Vec<String>) -> Result<Vec<EffectSpec>, String> {
     return Ok(result);
 }
 
+pub fn arg_exists(thing: &String, map: &HashMap<String, f64>) -> Result<f64, String> {
+    match map.get(thing) {
+        Some(t) => Ok(*t),
+        None => Err(format!("Missing argument '{thing}'"))
+    }
+}
+
+pub fn verify_range(thing: &String, min:f64, max:f64, map: &HashMap<String, f64>) -> Result<f64, String> {
+    let arg = arg_exists(thing, map)?;
+    
+    if min > max {
+        panic!("Invalid argument verification setup, min value is greater than max value")
+    }
+
+    if arg >= max || arg <= min {
+        return Err(format!("Argument '{thing}' must be in range [{min}, {max}]"));
+    };
+
+    Ok(arg)
+}

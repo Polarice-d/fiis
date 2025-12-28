@@ -1,6 +1,7 @@
 mod encoder;
 mod decoder;
 mod types;
+mod audio_utils;
 mod parse_utils;
 mod effect_modules;
 
@@ -27,7 +28,7 @@ struct Args {
 
     /// Set a fixed tail duration in seconds 
     #[arg(long, short)]
-    tail: Option<f32>,
+    tail: Option<f64>,
 
     /// The effects chain
     effects: Vec<String>,
@@ -51,7 +52,7 @@ fn main() {
     add_effect(effect_modules::gain::Gain, &mut effect_map);
     add_effect(effect_modules::softclip::Softclip, &mut effect_map);
     add_effect(effect_modules::normalize::Normalize, &mut effect_map);
-    add_effect(effect_modules::eqband::EqBand, &mut effect_map);
+    add_effect(effect_modules::eq::PeakingEQ, &mut effect_map);
 
     // <-- HERE IS WHERE YOU ADD EFFECTS//
 
@@ -104,6 +105,14 @@ fn main() {
             Ok(_) => {},
             Err(message) => {
                 error(message, ErrorKind::Io);
+                return;
+            }
+        }
+        match audio_utils::sanitize_buffer(&mut buffer) {
+            Ok(_) => {},
+            Err(message) => {
+                error(message, ErrorKind::ValueValidation);
+                return;
             }
         }
     }
