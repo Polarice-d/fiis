@@ -23,8 +23,13 @@ Some effects may generate extra audio (like delay and reverb). You can specify t
 ```bash
 fiis path/to/file.wav "delay:wet=1:fb=1.1:time=50" -t 0 --overwrite
 ```
-
 **Note:** the tool will encode the output file with the same spec as the input file (bit depth, sample format, sample rate).
+
+#### Before
+[Uploading showcase_a.wav…]()
+
+#### After
+[Uploading showcase_b.wav…]()
 
 ### Supported Effects
 | Name | Usage | Details |
