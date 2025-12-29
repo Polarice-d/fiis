@@ -13,7 +13,7 @@ fn parse_effect_spec(input: &str) -> Result<EffectSpec, String> {
 
     for arg in buffer.iter().skip(1) {
         if arg.is_empty() {
-            return Err(format!("malformed arguments for effect '{effect_name}'"));
+            return Err(format!("Malformed arguments ({effect_name})"));
         }
 
         let pair: Vec<&str> = arg.split("=").collect();
@@ -21,7 +21,7 @@ fn parse_effect_spec(input: &str) -> Result<EffectSpec, String> {
             2 => arguments.insert(
                 pair[0].trim().to_lowercase(),
                 pair[1].trim().to_lowercase().parse().map_err(|e: ParseFloatError| e.to_string())?),
-            _ => return Err(format!("Malformed argument '{arg}' for effect '{effect_name}'"))
+            _ => return Err(format!("Malformed argument '{arg}' ({effect_name})"))
         };
     }
 
@@ -58,9 +58,29 @@ pub fn verify_range(thing: &String, min:f64, max:f64, map: &HashMap<String, f64>
         panic!("Invalid argument verification setup, min value is greater than max value")
     }
 
-    if arg >= max || arg <= min {
+    if arg > max || arg < min {
         return Err(format!("Argument '{thing}' must be in range [{min}, {max}]"));
     };
+    Ok(arg)
+}
+
+
+pub fn verify_min(thing: &String, min:f64, map: &HashMap<String, f64>) -> Result<f64, String> {
+    let arg = arg_exists(thing, map)?;
+
+    if arg < min {
+        return Err(format!("Argument '{thing}' must be >= {min}"));
+    }
+
+    Ok(arg)
+}
+
+pub fn verify_max(thing: &String, max:f64, map: &HashMap<String, f64>) -> Result<f64, String> {
+    let arg = arg_exists(thing, map)?;
+
+    if arg > max {
+        return Err(format!("Argument '{thing}' must be <= {max}"));
+    }
 
     Ok(arg)
 }

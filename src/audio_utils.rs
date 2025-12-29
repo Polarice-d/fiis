@@ -24,9 +24,10 @@ pub fn sanitize_buffer(buffer: &mut AudioBuffer) -> Result<(), String> {
         channel.resize(max, 0.0);
     }
 
-
-    
-
     Ok(())
 
+}
+
+pub fn get_buffer_duration(buffer: &AudioBuffer) -> f64 {
+    buffer.channels[0].len() as f64 / buffer.spec.sample_rate as f64
 }

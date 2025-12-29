@@ -1,17 +1,15 @@
-use crate::types::AudioBuffer;
+use crate::types::{AudioBuffer, I24_MAX};
 use std::{path::PathBuf};
 use hound::WavReader;
 use hound::SampleFormat::{Float,Int};
 
-pub fn read_and_normalize_wav(path:&PathBuf) -> Result<AudioBuffer, String> {
+pub fn read_file(path:&PathBuf) -> Result<AudioBuffer, String> {
     let mut reader = match WavReader::open(&path) {
         Ok(val) => val,
         Err(val) => {return Err(val.to_string());}
     };
 
     let spec = reader.spec();
-    println!("Reading file {:#?}", path);
-    println!("   Sample rate: {},\n   Bit depth: {},\n   Sample format: {:#?},\n   Channels: {}", spec.sample_rate, spec.bits_per_sample, spec.sample_format, spec.channels);
 
     let samples: Vec<f64> = match spec.bits_per_sample {
         16 => reader
@@ -20,7 +18,7 @@ pub fn read_and_normalize_wav(path:&PathBuf) -> Result<AudioBuffer, String> {
             .collect(),
         24 => reader
             .samples::<i32>()
-            .map(|s| (s.unwrap() as f64) / i16::MAX as f64)
+            .map(|s| (s.unwrap() as f64) / I24_MAX as f64)
             .collect(),
         32 => match spec.sample_format {
             Int => reader

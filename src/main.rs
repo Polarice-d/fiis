@@ -5,11 +5,13 @@ mod audio_utils;
 mod parse_utils;
 mod effect_modules;
 
-use std::{collections::HashMap, path::PathBuf};
+use colored::Colorize;
+use std::{collections::HashMap, path::PathBuf, time::Duration};
 use clap::{CommandFactory, Parser, error::ErrorKind};
 use std::time::Instant;
+use indicatif::{ProgressBar, ProgressStyle};
 
-use crate::types::AudioEffect;
+use crate::{audio_utils::get_buffer_duration, types::AudioEffect};
 
 #[derive(Parser)]
 #[command(name="fiis", version, about, long_about= None)]
@@ -53,7 +55,9 @@ fn main() {
     add_effect(effect_modules::softclip::Softclip, &mut effect_map);
     add_effect(effect_modules::normalize::Normalize, &mut effect_map);
     add_effect(effect_modules::eq::PeakingEQ, &mut effect_map);
-
+    add_effect(effect_modules::eq::BandPassEQ, &mut effect_map);
+    add_effect(effect_modules::eq::HShelfEQ, &mut effect_map);
+    add_effect(effect_modules::eq::LShelfEQ, &mut effect_map);
     // <-- HERE IS WHERE YOU ADD EFFECTS//
 
     let args = Args::parse();
@@ -63,7 +67,7 @@ fn main() {
     }
 
     if args.output.is_none() && !args.overwrite {
-        error("Must specify either output (-o) or overwrite (--overwrite)".to_string(), ErrorKind::MissingRequiredArgument);
+        error("No output specified (use --overwrite to replace the original file)".to_string(), ErrorKind::MissingRequiredArgument);
         return;
     }
 
@@ -81,49 +85,100 @@ fn main() {
                 match effect.validate_arguments(&effect_spec.arguments, &args.tail) {
                     Ok(_) => {},
                     Err(message) => {
-                        error(message, ErrorKind::InvalidValue);
+                        error(format!("{} -> {message}", effect.get_name()), ErrorKind::InvalidValue);
                         return;
                     }
                 }
             },
             None => {
-                error(format!("unknown effect '{}'", effect_spec.name), ErrorKind::UnknownArgument);
+                error(format!("Unknown effect '{}'", effect_spec.name), ErrorKind::UnknownArgument);
                 return;
             }
         }
     }
 
-    let mut buffer = match decoder::read_and_normalize_wav(&args.file_path) {
+    let mut buffer = match decoder::read_file(&args.file_path) {
         Ok(val) => val,
         Err(e) => {error(e, ErrorKind::Io); return;}
     };
 
+    let spec = &buffer.spec;
+
+    let message1 = format!("Reading file {:#?}", &args.file_path).bold();
+    let message2 = format!("   Sample rate: {},\n   Duration: {:},\n   Bit depth: {},\n   Sample format: {},\n   Channels: {}", 
+        spec.sample_rate.to_string().bright_blue(),
+        format!("{:.2}", audio_utils::get_buffer_duration(&buffer)).bright_blue(),
+        spec.bits_per_sample.to_string().bright_blue(),
+        format!("{:?}", spec.sample_format).bright_blue(),
+        spec.channels.to_string().bright_blue()
+    );
+
+    eprintln!("{message1}\n{message2}\n");
+
     for effect_spec in effect_chain.iter() {
         let effect = effect_map.get(&effect_spec.name).unwrap();
-        println!("Applying effect '{}'", effect_spec.name);
-        match effect.apply_effect(&mut buffer, &effect_spec.arguments, &args.tail) {
-            Ok(_) => {},
+        let bar = ProgressBar::new_spinner();
+        bar.enable_steady_tick(Duration::from_millis(100));
+        bar.set_style(
+            ProgressStyle::with_template(format!("Applying effect '{}' {{msg}}{{spinner}}", effect_spec.name).as_str())
+            .unwrap()
+        );
+        
+        let result = effect.apply_effect(&mut buffer, &effect_spec.arguments, &args.tail);
+
+        let message;
+        match result {
+            Ok(m) => { message = m },
             Err(message) => {
+                bar.finish_with_message(format!("{}", "failed".red()));
                 error(message, ErrorKind::Io);
                 return;
             }
         }
         match audio_utils::sanitize_buffer(&mut buffer) {
-            Ok(_) => {},
+            Ok(_) => {
+                if message.is_some() {
+                    bar.finish_with_message(format!("... {} {}", "done".green(), format!("({})", message.unwrap()).yellow()));
+                } else {
+                    bar.finish_with_message(format!("... {}", "done".green()));
+                }
+
+            },
             Err(message) => {
+                bar.finish_with_message(format!("... {}","failed".red()));
                 error(message, ErrorKind::ValueValidation);
                 return;
             }
         }
     }
-
-    println!("Finished processing, writing to file...\n");
-
+    
+    eprintln!("\n");
+    
+    let path;
     if args.overwrite {
-        encoder::encode_file(buffer, args.file_path);
-        return;
+        path = args.file_path;
+    } else {
+        path = args.output.unwrap();
     }
-    encoder::encode_file(buffer, args.output.unwrap());
 
-    println!("Total processing time: {:.2?}", time.elapsed());
+    let bar = ProgressBar::new_spinner();
+    bar.enable_steady_tick(Duration::from_millis(100));
+    bar.set_style(ProgressStyle::with_template(format!("Writing to {:#?} {{msg}} {{spinner}}", path).as_str()).unwrap());
+
+    match encoder::encode_file(&buffer, path) {
+        Ok(count) => {
+            bar.finish_with_message(format!("... {}", "done".green()));
+            if count > 0 {
+                eprintln!("   Clipping: {} samples. Consider normalizing the audio or decreasing the gain.", count.to_string().yellow())
+            }
+        },
+        Err(e) => {
+            bar.finish_with_message(format!("... {}","failed".red()));
+            error(e.to_string(), ErrorKind::ValueValidation);
+            return;
+        }
+    }
+    eprintln!("   Output duration: {:.2}s", get_buffer_duration(&buffer));
+
+    eprintln!("Total processing time: {:.2?}", time.elapsed());
 }

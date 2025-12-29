@@ -1,4 +1,5 @@
 # Added by cargo
 
 /target
-*.wav
+test.wav
+output.wav
