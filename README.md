@@ -13,7 +13,7 @@ Effects are written as `"name:arg1=a:arg2=b..."`, where a and b are numerical. A
 
 Effects are applied in sequence from left to right.
 ```bash
-fiis path/to/file.wav "softclip:db=10" "peakingeq:db=-10" "normalize" -o output.wav
+fiis path/to/file.wav "softclip:db=10" "peakingeq:db=-10:bw=0.3:freq=300" "normalize" -o output.wav
 ```
 This will modify the original file.
 ```bash
